@@ -4,7 +4,7 @@ import google.generativeai as genai
 import os
 import sys
 
-# 1. RECUPERO CREDENZIALI
+# 1. RECUPERO CREDENZIALI BLINDATE
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
@@ -15,23 +15,22 @@ if not all([GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# FONTI STRATEGICHE MIRATE PER NICCHIA
+# 2. FONTI STRATEGICHE MIRATE PER NICCHIA
 SOURCES = {
-    "SCMP_Macro": "https://www.scmp.com/rss/2/feed", # Economia generale
-    "USNI_Military": "https://news.usni.org/category/china/feed", # US Naval Institute - Movimenti Flotta PLAN (Militare)
-    "DigiTimes_Tech": "https://www.digitimes.com/rss/daily.xml", # Supply chain asiatica e Semiconduttori (Tech War)
-    "Nikkei_Asia": "https://asia.nikkei.com/rss/feed/category/53" # Dinamiche immobiliari e debito (Economia)
+    "SCMP_Macro": "https://www.scmp.com/rss/2/feed", 
+    "USNI_Military": "https://news.usni.org/category/china/feed", 
+    "DigiTimes_Tech": "https://www.digitimes.com/rss/daily.xml", 
+    "Nikkei_Asia": "https://asia.nikkei.com/rss/feed/category/53" 
 }
 
+# 3. MOTORE DI ESTRAZIONE (CON ANTI-FIREWALL)
 def fetch_latest_intel():
     intel_data = []
-    # CONTROMISURA 1: Travestimento (Spoofing). Facciamo credere al firewall di essere un browser Windows.
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
     
     for category, url in SOURCES.items():
         try:
             print(f"Estrazione da {category}...")
-            # CONTROMISURA 2: Fail-Fast. Se non risponde in 10 secondi, abbandona e passa oltre.
             response = requests.get(url, headers=headers, timeout=10)
             feed = feedparser.parse(response.content)
             
@@ -43,10 +42,10 @@ def fetch_latest_intel():
             
     return "\n".join(intel_data)
 
+# 4. MOTORE COGNITIVO (PROMPT A MATRICE)
 def analyze_with_gemini(raw_data):
     model = genai.GenerativeModel('gemini-2.5-flash')
     
-    # PROMPT A MATRICE PONDERATA (Ingegneria Avanzata)
     prompt = f"""
     Sei il Direttore dell'OSINT per un'agenzia di intelligence strategica. Il tuo compito è filtrare il rumore e individuare segnali deboli in questo feed di dati grezzi sulla Cina.
 
@@ -59,7 +58,7 @@ def analyze_with_gemini(raw_data):
     - Se una notizia non rientra in questi 3 vettori, ELIMINALA.
     - Per ogni notizia rilevante, estrai il fatto oggettivo e calcola l'IMPATTO STRATEGICO (Basso, Medio, Alto).
 
-    FORMATO DI OUTPUT OBBLIGATORIO (Max 3500 caratteri, usa Markdown, sii telegrafico):
+    FORMATO DI OUTPUT OBBLIGATORIO (Usa Markdown, sii denso e analitico):
     # 🔴 EXECUTIVE BRIEFING: RPC
     
     ### 💻 Semiconduttori & Tech War
@@ -77,24 +76,35 @@ def analyze_with_gemini(raw_data):
     response = model.generate_content(prompt)
     return response.text
 
+# 5. MOTORE DI CONSEGNA (ALGORITMO DI CHUNKING)
 def send_telegram_briefing(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    # CONTROMISURA 3: La Ghigliottina. Tronca per evitare l'errore "message too long"
-    safe_message = message[:4000]
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": safe_message, "parse_mode": "Markdown"}
     
-    try:
-        # CONTROMISURA 4: Timeout anche verso Telegram
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code != 200:
-            print(f"Errore Telegram: {response.text}")
+    chunk_size = 4000 
+    chunks = [message[i:i+chunk_size] for i in range(0, len(message), chunk_size)]
+    
+    print(f"Messaggio diviso in {len(chunks)} blocchi. Inizio trasmissione...")
+    
+    for index, chunk in enumerate(chunks):
+        if len(chunks) > 1:
+            testo_formattato = f"📄 *Parte {index + 1} di {len(chunks)}*\n\n{chunk}"
         else:
-            print("Briefing consegnato con successo su Telegram!")
-    except Exception as e:
-        print(f"Errore critico di connessione a Telegram: {str(e)}")
+            testo_formattato = chunk
 
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": testo_formattato, "parse_mode": "Markdown"}
+        
+        try:
+            response = requests.post(url, json=payload, timeout=10)
+            if response.status_code != 200:
+                print(f"Errore Telegram sul blocco {index + 1}: {response.text}")
+            else:
+                print(f"Blocco {index + 1} consegnato con successo.")
+        except Exception as e:
+            print(f"Errore critico di connessione sul blocco {index + 1}: {str(e)}")
+
+# --- ESECUZIONE PRINCIPALE ---
 if __name__ == "__main__":
-    print("--- AVVIO PIPELINE OSINT ---")
+    print("--- AVVIO PIPELINE OSINT (V2.0 MULTI-CHUNK) ---")
     raw_intel = fetch_latest_intel()
     
     if raw_intel and "Titolo:" in raw_intel:
