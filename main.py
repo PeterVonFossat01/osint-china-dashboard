@@ -15,9 +15,12 @@ if not all([GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
 
 genai.configure(api_key=GEMINI_API_KEY)
 
+# FONTI STRATEGICHE MIRATE PER NICCHIA
 SOURCES = {
-    "SCMP_China": "https://www.scmp.com/rss/2/feed",
-    "SCMP_Tech": "https://www.scmp.com/rss/318198/feed"
+    "SCMP_Macro": "https://www.scmp.com/rss/2/feed", # Economia generale
+    "USNI_Military": "https://news.usni.org/category/china/feed", # US Naval Institute - Movimenti Flotta PLAN (Militare)
+    "DigiTimes_Tech": "https://www.digitimes.com/rss/daily.xml", # Supply chain asiatica e Semiconduttori (Tech War)
+    "Nikkei_Asia": "https://asia.nikkei.com/rss/feed/category/53" # Dinamiche immobiliari e debito (Economia)
 }
 
 def fetch_latest_intel():
@@ -41,20 +44,34 @@ def fetch_latest_intel():
     return "\n".join(intel_data)
 
 def analyze_with_gemini(raw_data):
-    # Uso del modello ultra-rapido
     model = genai.GenerativeModel('gemini-2.5-flash')
+    
+    # PROMPT A MATRICE PONDERATA (Ingegneria Avanzata)
     prompt = f"""
-    Agisci come Analista Geopolitico. Analizza questo raw data feed sulle dinamiche della Cina.
-    Genera un Executive Briefing in italiano strutturato in markdown con:
-    1. 📊 Movimenti Economici / Tech
-    2. ⚔️ Postura Geopolitica
-    3. 🎯 Indicatori Chiave (Prossime 24h)
+    Sei il Direttore dell'OSINT per un'agenzia di intelligence strategica. Il tuo compito è filtrare il rumore e individuare segnali deboli in questo feed di dati grezzi sulla Cina.
+
+    I TUOI UNICI 3 VETTORI DI RICERCA (Ignora categoricamente tutto il resto):
+    1. 💻 GUERRA DEI CHIP E TECH: Cerca restrizioni all'export, progressi SMIC/Huawei, dazi su EV, AI computing, colli di bottiglia su terre rare.
+    2. ⚓ POSTURA MILITARE E PLAN: Cerca manovre della Marina (PLAN) nel Mar Cinese Meridionale, incursioni ADIZ a Taiwan, cambi ai vertici dell'Esercito (PLA).
+    3. 🏢 CRISI MACRO E DEBITO: Cerca default immobiliari (Vanke, Evergrande), iniezioni di liquidità della PBOC, dati su deflazione e disoccupazione giovanile.
+
+    PROTOCOLLO DI ANALISI:
+    - Se una notizia non rientra in questi 3 vettori, ELIMINALA.
+    - Per ogni notizia rilevante, estrai il fatto oggettivo e calcola l'IMPATTO STRATEGICO (Basso, Medio, Alto).
+
+    FORMATO DI OUTPUT OBBLIGATORIO (Max 3500 caratteri, usa Markdown, sii telegrafico):
+    # 🔴 EXECUTIVE BRIEFING: RPC
     
-    REGOLE IMPERATIVE:
-    - Densità informativa massima. Zero fluff.
-    - LUNGHEZZA MASSIMA ASSOLUTA: 3500 caratteri. Sii estremamente sintetico.
+    ### 💻 Semiconduttori & Tech War
+    [Nessun dato rilevante] (Oppure elenca i fatti con -> *Impatto: [Valutazione]*)
     
-    Dati grezzi:
+    ### ⚓ Postura Militare (PLA/PLAN)
+    [Nessun dato rilevante] (Oppure elenca i fatti con -> *Impatto: [Valutazione]*)
+    
+    ### 🏢 Crisi Debito & Macroeconomia
+    [Nessun dato rilevante] (Oppure elenca i fatti con -> *Impatto: [Valutazione]*)
+
+    DATI GREZZI DA ANALIZZARE:
     {raw_data}
     """
     response = model.generate_content(prompt)
