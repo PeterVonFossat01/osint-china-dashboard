@@ -33,7 +33,7 @@ def fetch_latest_intel():
     return "\n".join(intel_data)
 
 def analyze_with_gemini(raw_data):
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-2.5-flash')
     prompt = f"""
     Agisci come Analista Geopolitico e Architetto di Sistemi. Analizza questo raw data feed sulle dinamiche della RPC (Cina).
     Genera un Executive Briefing in italiano strutturato in markdown con:
