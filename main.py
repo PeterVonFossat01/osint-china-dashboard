@@ -41,7 +41,9 @@ def analyze_with_gemini(raw_data):
     2. ⚔️ Postura Geopolitica (Rischi e sviluppi)
     3. 🎯 Indicatori Chiave (Cosa monitorare nelle prossime 24h)
     
-    Densità informativa massima. Zero fluff.
+    REGOLE IMPERATIVE:
+    - Densità informativa massima. Zero fluff.
+    - LUNGHEZZA MASSIMA ASSOLUTA: 3500 caratteri. Sii estremamente sintetico.
     
     Dati grezzi:
     {raw_data}
@@ -51,7 +53,9 @@ def analyze_with_gemini(raw_data):
 
 def send_telegram_briefing(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    # Tronca il messaggio a 4000 caratteri per impedire il rifiuto da parte di Telegram
+    safe_message = message[:4000]
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": safe_message, "parse_mode": "Markdown"}
     response = requests.post(url, json=payload)
     if response.status_code != 200:
         print(f"Errore Telegram: {response.text}")
