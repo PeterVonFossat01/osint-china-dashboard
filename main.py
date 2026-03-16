@@ -3,6 +3,7 @@ import requests
 import google.generativeai as genai
 import os
 import sys
+import time  # NUOVO: Necessario per la pausa tattica anti-spam
 
 # 1. CREDENZIALI
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -15,7 +16,7 @@ if not all([GEMINI_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID]):
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 2. SET DI FONTI UNIFICATO (Generali + Tattiche)
+# 2. SET DI FONTI UNIFICATO
 SOURCES = {
     "SCMP_General": "https://www.scmp.com/rss/2/feed",
     "SCMP_Tech": "https://www.scmp.com/rss/318198/feed",
@@ -41,10 +42,9 @@ def fetch_latest_intel():
             
     return "\n".join(intel_data)
 
-# 4. ANALISI INTEGRATA (GENERALISTA + SPECIFICA)
+# 4. ANALISI INTEGRATA
 def analyze_with_gemini(raw_data):
     model = genai.GenerativeModel('gemini-2.5-flash')
-    
     prompt = f"""
     Agisci come Direttore dell'Intelligence Strategica. Analizza questi dati sulla Cina e produci un Executive Briefing integrato.
     
@@ -61,8 +61,7 @@ def analyze_with_gemini(raw_data):
 
     REGOLE:
     - Sii analitico e denso. Calcola l'impatto strategico per ogni notizia.
-    - Usa Markdown per la leggibilità.
-    - Non avere limiti di lunghezza, il sistema gestirà l'invio multiplo.
+    - Usa Markdown in modo corretto (chiudi sempre gli asterischi).
 
     DATI:
     {raw_data}
@@ -70,28 +69,47 @@ def analyze_with_gemini(raw_data):
     response = model.generate_content(prompt)
     return response.text
 
-# 5. CONSEGNA MULTI-MESSAGGIO (CHUNKING)
+# 5. CONSEGNA MULTI-MESSAGGIO INTELLIGENTE (SMART CHUNKING)
 def send_telegram_briefing(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    chunk_size = 4000
-    chunks = [message[i:i+chunk_size] for i in range(0, len(message), chunk_size)]
+    
+    # Divide il testo per paragrafi (evita di spezzare il Markdown a metà)
+    paragraphs = message.split('\n')
+    chunks = []
+    current_chunk = ""
+    
+    for p in paragraphs:
+        if len(current_chunk) + len(p) + 1 < 3800: # Margine di sicurezza
+            current_chunk += p + "\n"
+        else:
+            chunks.append(current_chunk)
+            current_chunk = p + "\n"
+    if current_chunk:
+        chunks.append(current_chunk)
+        
+    print(f"Messaggio diviso in {len(chunks)} blocchi. Inizio trasmissione...")
     
     for index, chunk in enumerate(chunks):
-        # Aggiunge intestazione se il messaggio è diviso
         prefix = f"📄 *REPORT OSINT - Parte {index+1}/{len(chunks)}*\n\n" if len(chunks) > 1 else ""
-        payload = {
-            "chat_id": TELEGRAM_CHAT_ID, 
-            "text": prefix + chunk, 
-            "parse_mode": "Markdown"
-        }
+        payload = {"chat_id": TELEGRAM_CHAT_ID, "text": prefix + chunk, "parse_mode": "Markdown"}
+        
         try:
-            requests.post(url, json=payload, timeout=15)
+            response = requests.post(url, json=payload, timeout=15)
+            # FALLBACK: Se Telegram rifiuta per errore Markdown, ritenta senza formattazione
+            if response.status_code != 200:
+                print(f"Errore Markdown al blocco {index+1}. Rinvio come testo semplice...")
+                payload["parse_mode"] = "" # Rimuove il markdown
+                requests.post(url, json=payload, timeout=15)
+            else:
+                print(f"Blocco {index+1} consegnato con successo.")
         except Exception as e:
-            print(f"Errore invio: {e}")
+            print(f"Errore invio blocco {index+1}: {e}")
+            
+        time.sleep(2)  # CONTROMISURA ANTI-SPAM: Aspetta 2 secondi tra un messaggio e l'altro
 
 # ESECUZIONE
 if __name__ == "__main__":
-    print("--- START V3.0 TOTAL INTEL ---")
+    print("--- START V3.1 TOTAL INTEL (SMART CHUNK) ---")
     data = fetch_latest_intel()
     if data:
         briefing = analyze_with_gemini(data)
