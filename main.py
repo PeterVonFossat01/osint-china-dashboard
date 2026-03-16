@@ -3,7 +3,8 @@ import requests
 import google.generativeai as genai
 import os
 import sys
-import time  # NUOVO: Necessario per la pausa tattica anti-spam
+import time
+import calendar
 
 # 1. CREDENZIALI
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -25,20 +26,41 @@ SOURCES = {
     "Nikkei_China": "https://asia.nikkei.com/rss/feed/category/53"
 }
 
-# 3. ESTRAZIONE DATI
+# 3. ESTRAZIONE DATI CON FILTRO TEMPORALE E CACHE-BUSTER
 def fetch_latest_intel():
     intel_data = []
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
+        'Cache-Control': 'no-cache'
+    }
+    
+    # Calcola il limite di tempo esatto: 48 ore fa (in secondi)
+    time_limit = time.time() - (48 * 3600)
     
     for category, url in SOURCES.items():
         try:
             print(f"Scansione {category}...")
-            response = requests.get(url, headers=headers, timeout=12)
+            # CACHE-BUSTER: Aggiunge l'ora esatta all'URL per forzare dati freschi
+            cache_buster_url = f"{url}?_={int(time.time())}"
+            response = requests.get(cache_buster_url, headers=headers, timeout=12)
             feed = feedparser.parse(response.content)
-            for entry in feed.entries[:3]:
+            
+            valid_entries = 0
+            for entry in feed.entries:
+                if valid_entries >= 3:
+                    break # Si ferma dopo aver trovato 3 notizie VALIDE E RECENTI
+                
+                # CONTROLLO DATA: Se la notizia è più vecchia di 48 ore, la ignora
+                if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                    entry_time = calendar.timegm(entry.published_parsed)
+                    if entry_time < time_limit:
+                        continue 
+                
                 intel_data.append(f"[{category}] {entry.title}: {entry.description}")
+                valid_entries += 1
+                
         except Exception as e:
-            print(f"Skip {category} causa timeout/errore.")
+            print(f"Skip {category} causa timeout/errore: {e}")
             
     return "\n".join(intel_data)
 
@@ -69,17 +91,16 @@ def analyze_with_gemini(raw_data):
     response = model.generate_content(prompt)
     return response.text
 
-# 5. CONSEGNA MULTI-MESSAGGIO INTELLIGENTE (SMART CHUNKING)
+# 5. CONSEGNA MULTI-MESSAGGIO INTELLIGENTE
 def send_telegram_briefing(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     
-    # Divide il testo per paragrafi (evita di spezzare il Markdown a metà)
     paragraphs = message.split('\n')
     chunks = []
     current_chunk = ""
     
     for p in paragraphs:
-        if len(current_chunk) + len(p) + 1 < 3800: # Margine di sicurezza
+        if len(current_chunk) + len(p) + 1 < 3800: 
             current_chunk += p + "\n"
         else:
             chunks.append(current_chunk)
@@ -95,25 +116,24 @@ def send_telegram_briefing(message):
         
         try:
             response = requests.post(url, json=payload, timeout=15)
-            # FALLBACK: Se Telegram rifiuta per errore Markdown, ritenta senza formattazione
             if response.status_code != 200:
                 print(f"Errore Markdown al blocco {index+1}. Rinvio come testo semplice...")
-                payload["parse_mode"] = "" # Rimuove il markdown
+                payload["parse_mode"] = "" 
                 requests.post(url, json=payload, timeout=15)
             else:
                 print(f"Blocco {index+1} consegnato con successo.")
         except Exception as e:
             print(f"Errore invio blocco {index+1}: {e}")
             
-        time.sleep(2)  # CONTROMISURA ANTI-SPAM: Aspetta 2 secondi tra un messaggio e l'altro
+        time.sleep(2) 
 
 # ESECUZIONE
 if __name__ == "__main__":
-    print("--- START V3.1 TOTAL INTEL (SMART CHUNK) ---")
+    print("--- START V4.0 TOTAL INTEL (TIME-GATED) ---")
     data = fetch_latest_intel()
     if data:
         briefing = analyze_with_gemini(data)
         send_telegram_briefing(briefing)
         print("--- MISSION COMPLETE ---")
     else:
-        print("Nessun dato raccolto.")
+        print("Nessun dato recente raccolto nelle ultime 48h.")
